@@ -2,6 +2,15 @@
 
 **Real-time hardware monitor for Windows 10 and 11 — live, private and lightweight.**
 
+[![Latest release](https://img.shields.io/github/v/release/nautilusmotion/NautilusMonitor?color=e11420&label=download)](https://github.com/nautilusmotion/NautilusMonitor/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+### ⬇ [Download the latest release](https://github.com/nautilusmotion/NautilusMonitor/releases/latest)
+
+Unzip and run `NautilusMonitor.exe` — no installer. Keep the bundled `LibreHardwareMonitorLib.dll`
+and `HidSharp.dll` next to it so temperatures and fan speeds work. Or [build from source](#build) with
+the C# compiler already in Windows.
+
 A free, open-source companion to [NauTilus Optimizer](https://github.com/nautilusmotion/NautilusOptimizer).
 Where the Optimizer tunes a PC, the Monitor lets you *see* it: CPU/GPU/RAM/disk usage, live
 clock speeds, temperatures and fan speeds — in a single, tiny, no-telemetry app.
@@ -10,8 +19,8 @@ clock speeds, temperatures and fan speeds — in a single, tiny, no-telemetry ap
 
 ## Highlights
 
-- **Single `.exe`, ~130 KB.** No installer, no dependencies, no .NET SDK needed — it uses the
-  C# compiler already bundled with Windows.
+- **Single `.exe`, ~200 KB.** No installer and no .NET SDK needed — it uses the C# compiler already
+  bundled with Windows. The base app is dependency-free; advanced sensors are an opt-in add-on.
 - **Runs without administrator.** Basic monitoring needs no elevation and no driver.
 - **No telemetry, no external connections, no third-party libraries** in the base app.
 - **6 languages** with a picker at startup: English, Español, Русский, Français, Deutsch, Português.
