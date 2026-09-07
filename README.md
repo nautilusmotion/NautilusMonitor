@@ -11,6 +11,8 @@ Unzip and run `NautilusMonitor.exe` — no installer. Keep the bundled `LibreHar
 and `HidSharp.dll` next to it so temperatures and fan speeds work. Or [build from source](#build) with
 the C# compiler already in Windows.
 
+🎬 **[Watch the 30-second promo](media/nautilus-monitor-promo.mp4)** — 1080p here in the repo, 4K attached to the [latest release](https://github.com/nautilusmotion/NautilusMonitor/releases/latest).
+
 A free, open-source companion to [NauTilus Optimizer](https://github.com/nautilusmotion/NautilusOptimizer).
 Where the Optimizer tunes a PC, the Monitor lets you *see* it: CPU/GPU/RAM/disk usage, live
 clock speeds, temperatures and fan speeds — in a single, tiny, no-telemetry app.
