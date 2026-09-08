@@ -48,6 +48,7 @@ namespace NautilusMotion.Monitor
         public string CpuName = "";
         public int Cores;
         public int Threads;
+        public int Sockets;
         public double BaseClockGhz;
         public string GpuName = "";
         public double RamTotalGB;
@@ -60,17 +61,24 @@ namespace NautilusMotion.Monitor
             s.Threads = Environment.ProcessorCount;
             try
             {
+                // Suma todos los sockets (servidores Xeon de 2+ CPU) y cuenta procesadores fisicos.
+                int sockets = 0, cores = 0, threads = 0;
                 using (var mos = new ManagementObjectSearcher("SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed FROM Win32_Processor"))
                     foreach (ManagementObject mo in mos.Get())
                     {
-                        s.CpuName = Clean(AsString(mo["Name"]));
-                        s.Cores = AsInt(mo["NumberOfCores"]);
-                        int lp = AsInt(mo["NumberOfLogicalProcessors"]);
-                        if (lp > 0) s.Threads = lp;
-                        int mhz = AsInt(mo["MaxClockSpeed"]);
-                        if (mhz > 0) s.BaseClockGhz = mhz / 1000.0;
-                        break;
+                        if (sockets == 0)
+                        {
+                            s.CpuName = Clean(AsString(mo["Name"]));
+                            int mhz = AsInt(mo["MaxClockSpeed"]);
+                            if (mhz > 0) s.BaseClockGhz = mhz / 1000.0;
+                        }
+                        sockets++;
+                        cores += AsInt(mo["NumberOfCores"]);
+                        threads += AsInt(mo["NumberOfLogicalProcessors"]);
                     }
+                s.Sockets = sockets;
+                if (cores > 0) s.Cores = cores;
+                if (threads > 0) s.Threads = threads;
             }
             catch { }
 
@@ -259,13 +267,22 @@ namespace NautilusMotion.Monitor
             try
             {
                 int cpus = Environment.ProcessorCount;
+                if (cpus < 1) cpus = 1;
                 int stride = Marshal.SizeOf(typeof(Native.SPPI));
-                int size = stride * cpus;
+                int size = stride * (cpus + 8); // margen por seguridad
                 IntPtr buf = Marshal.AllocHGlobal(size);
                 try
                 {
                     int ret;
                     int status = Native.NtQuerySystemInformation(8, buf, size, out ret);
+                    // STATUS_INFO_LENGTH_MISMATCH: el buffer se queda corto -> reintenta con el tamano pedido
+                    if (status == unchecked((int)0xC0000004) && ret > size)
+                    {
+                        Marshal.FreeHGlobal(buf);
+                        size = ret;
+                        buf = Marshal.AllocHGlobal(size);
+                        status = Native.NtQuerySystemInformation(8, buf, size, out ret);
+                    }
                     if (status != 0) return;
                     int count = ret / stride;
                     if (count <= 0) count = cpus;

@@ -32,7 +32,7 @@ namespace NautilusMotion.Monitor
         private Gauge _gCpu, _gGpu, _gRam, _gDisk;
 
         // CPU
-        private TextBlock _cpuNameTx, _clockTx, _coresTx;
+        private TextBlock _cpuNameTx, _clockTx, _coresTx, _coreNote;
         private UniformGrid _coreHost;
         private BarMeter[] _coreBars;
         private TextBlock[] _corePcts;
@@ -380,6 +380,8 @@ namespace NautilusMotion.Monitor
             sp.Children.Add(row);
 
             sp.Children.Add(new TextBlock { Text = Loc.T("card.percore"), Foreground = Theme.Muted, FontSize = 10, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 12, 0, 6) });
+            _coreNote = new TextBlock { Text = "", Foreground = Theme.Muted, FontSize = 10, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
+            sp.Children.Add(_coreNote);
             _coreHost = new UniformGrid { Columns = 2 };
             sp.Children.Add(_coreHost);
             return card;
@@ -451,6 +453,7 @@ namespace NautilusMotion.Monitor
             _cpuNameTx.Text = string.IsNullOrEmpty(info.CpuName) ? "--" : info.CpuName;
 
             string cores = "";
+            if (info.Sockets > 1) cores += info.Sockets + " " + Loc.T("lbl.cpus") + " · ";
             if (info.Cores > 0) cores += info.Cores + " " + Loc.T("lbl.cores");
             if (info.Threads > 0) cores += (cores.Length > 0 ? " · " : "") + info.Threads + " " + Loc.T("lbl.threads");
             if (info.BaseClockGhz > 0) cores += (cores.Length > 0 ? "\n" : "") + info.BaseClockGhz.ToString("0.0", Inv) + " GHz " + Loc.T("lbl.base");
@@ -459,16 +462,22 @@ namespace NautilusMotion.Monitor
             _osTx.Text = string.IsNullOrEmpty(info.Os) ? "--" : info.Os;
             _boardTx.Text = string.IsNullOrEmpty(info.Board) ? "--" : info.Board;
 
-            // Construye las barras por-nucleo
-            int n = info.Threads > 0 ? info.Threads : Environment.ProcessorCount;
+            // Las barras por-nucleo se crean al llegar la primera muestra (BuildCoreBars),
+            // para que su numero coincida con lo realmente muestreado en este equipo.
+        }
+
+        // Crea n barras por-nucleo. Se llama con el numero real de procesadores muestreados.
+        private void BuildCoreBars(int n)
+        {
             if (n < 1) n = 1;
+            if (n > 256) n = 256; // tope de seguridad para servidores enormes
             _coreHost.Children.Clear();
             _coreBars = new BarMeter[n];
             _corePcts = new TextBlock[n];
             for (int i = 0; i < n; i++)
             {
                 var cell = new Grid { Margin = new Thickness(0, 0, 10, 6) };
-                cell.ColumnDefinitions.Add(Col(new GridLength(26)));
+                cell.ColumnDefinitions.Add(Col(new GridLength(28)));
                 cell.ColumnDefinitions.Add(Col(new GridLength(1, GridUnitType.Star)));
                 cell.ColumnDefinitions.Add(Col(new GridLength(34)));
                 var lbl = new TextBlock { Text = (i).ToString(), Foreground = Theme.Muted, FontSize = 10, FontFamily = Theme.Mono, VerticalAlignment = VerticalAlignment.Center };
@@ -505,14 +514,22 @@ namespace NautilusMotion.Monitor
             else
                 _gDisk.SetUnknown(Loc.T("na"));
 
-            // Por-nucleo
-            if (s.CpuCores != null && _coreBars != null)
+            // Por-nucleo: crea las barras la primera vez (o si cambia el recuento) segun lo muestreado
+            if (s.CpuCores != null && s.CpuCores.Length > 0)
             {
+                if (_coreBars == null || _coreBars.Length != s.CpuCores.Length) BuildCoreBars(s.CpuCores.Length);
                 int m = Math.Min(s.CpuCores.Length, _coreBars.Length);
                 for (int i = 0; i < m; i++)
                 {
                     _coreBars[i].SetValue(s.CpuCores[i], Theme.AccentBrush);
                     _corePcts[i].Text = F0(s.CpuCores[i]) + "%";
+                }
+                if (_coreNote != null)
+                {
+                    if (_info != null && _info.Threads > s.CpuCores.Length)
+                        _coreNote.Text = Loc.T("core.group").Replace("{n}", s.CpuCores.Length.ToString()).Replace("{m}", _info.Threads.ToString());
+                    else
+                        _coreNote.Text = "";
                 }
             }
 
