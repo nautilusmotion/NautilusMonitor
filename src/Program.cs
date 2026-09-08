@@ -42,6 +42,41 @@ namespace NautilusMotion.Monitor
                 return;
             }
 
+            // Prueba interna del tamaño adaptativo: construye la ventana real, deja
+            // que se ajuste a los nucleos/resolucion y escribe sus dimensiones.
+            // Uso: --sizetest <ruta_salida>
+            if (args != null && args.Length >= 2 && args[0] == "--sizetest")
+            {
+                var stApp = new Application();
+                stApp.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                var stWin = new MainWindow();
+                stWin.Left = -12000; stWin.Top = -12000; stWin.ShowInTaskbar = false;
+                string stOut = args[1];
+                stWin.Loaded += delegate
+                {
+                    var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2200) };
+                    t.Tick += delegate
+                    {
+                        t.Stop();
+                        try
+                        {
+                            var wa = SystemParameters.WorkArea;
+                            File.WriteAllText(stOut, string.Format(
+                                "window {0}x{1}  workarea {2}x{3}  procs {4}  fits={5}",
+                                (int)stWin.ActualWidth, (int)stWin.ActualHeight, (int)wa.Width, (int)wa.Height,
+                                Environment.ProcessorCount,
+                                (stWin.ActualHeight <= wa.Height && stWin.ActualWidth <= wa.Width)));
+                        }
+                        catch { }
+                        stApp.Shutdown();
+                    };
+                    t.Start();
+                };
+                stWin.Show();
+                stApp.Run();
+                return;
+            }
+
             // Prueba interna del modo avanzado (sin GUI): intenta activar los
             // sensores y escribe el resultado.  Uso: --advtest <ruta_salida>
             if (args != null && args.Length >= 2 && args[0] == "--advtest")

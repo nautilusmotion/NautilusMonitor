@@ -61,10 +61,29 @@ namespace NautilusMotion.Monitor
         {
             Title = "NauTilus Monitor";
             LoadAppIcon();
-            Width = 980;
-            Height = 850;
-            MinWidth = 900;
-            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            if (Program.DemoMode)
+            {
+                // Modo captura: tamaño fijo para screenshots deterministas.
+                Width = 980;
+                Height = 850;
+                WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            }
+            else
+            {
+                // Tamaño inicial estimado por nº de procesadores, nunca mayor que la
+                // pantalla. Se afina con la primera muestra (SizeToCores).
+                var wa0 = SystemParameters.WorkArea;
+                MaxWidth = wa0.Width;
+                MaxHeight = wa0.Height;
+                MinWidth = Math.Min(900.0, wa0.Width - 24);
+                double w0 = Math.Min(980.0, wa0.Width - 24);
+                double h0 = Math.Min(EstimateHeight(Environment.ProcessorCount), wa0.Height - 24);
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Width = w0;
+                Height = h0;
+                Left = wa0.Left + (wa0.Width - w0) / 2;
+                Top = wa0.Top + (wa0.Height - h0) / 2;
+            }
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
             Background = Brushes.Transparent;
@@ -517,7 +536,11 @@ namespace NautilusMotion.Monitor
             // Por-nucleo: crea las barras la primera vez (o si cambia el recuento) segun lo muestreado
             if (s.CpuCores != null && s.CpuCores.Length > 0)
             {
-                if (_coreBars == null || _coreBars.Length != s.CpuCores.Length) BuildCoreBars(s.CpuCores.Length);
+                if (_coreBars == null || _coreBars.Length != s.CpuCores.Length)
+                {
+                    BuildCoreBars(s.CpuCores.Length);
+                    SizeToCores(s.CpuCores.Length);   // ajusta el alto de la ventana a los núcleos
+                }
                 int m = Math.Min(s.CpuCores.Length, _coreBars.Length);
                 for (int i = 0; i < m; i++)
                 {
@@ -875,6 +898,40 @@ namespace NautilusMotion.Monitor
                         Icon = BitmapFrame.Create(st, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
             }
             catch { }
+        }
+
+        // ---------------------------------------------------------------
+        //  Tamaño de ventana adaptativo (por núcleos y por resolución)
+        // ---------------------------------------------------------------
+        private static double EstimateHeight(int coreCount)
+        {
+            int rows = (coreCount + 1) / 2;          // 2 columnas de barras por-núcleo
+            if (rows < 1) rows = 1;
+            double leftCol = 410 + rows * 19;         // ficha CPU (base + filas) + disco + red
+            double content = Math.Max(leftCol, 480);  // vs. columna derecha (temps + vent. + sistema)
+            return 478 + content;                     // + barra de título + héroe + gauges + pie
+        }
+
+        private void SizeToCores(int coreCount)
+        {
+            if (Program.DemoMode) return;             // en captura mantenemos el tamaño fijo
+            ApplyWindowSize(980, EstimateHeight(coreCount));
+        }
+
+        // Aplica un tamaño limitado al área de trabajo: se adapta a cualquier resolución
+        // (portátiles 1366x768, 4K, servidores) sin salirse de la pantalla, y recentra.
+        private void ApplyWindowSize(double w, double h)
+        {
+            var wa = SystemParameters.WorkArea;
+            double nw = Math.Min(w, wa.Width - 16);
+            double nh = Math.Min(h, wa.Height - 16);
+            if (nw < 320) nw = Math.Min(320, wa.Width);
+            if (nh < 320) nh = Math.Min(320, wa.Height);
+            if (Math.Abs(nw - Width) < 1 && Math.Abs(nh - Height) < 1) return;
+            Width = nw;
+            Height = nh;
+            Left = wa.Left + (wa.Width - nw) / 2;
+            Top = wa.Top + (wa.Height - nh) / 2;
         }
 
         private static RowDefinition Row(GridLength h) { return new RowDefinition { Height = h }; }
