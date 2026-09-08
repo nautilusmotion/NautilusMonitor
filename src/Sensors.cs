@@ -471,6 +471,13 @@ namespace NautilusMotion.Monitor
 
         public static bool DllPresent() { try { return File.Exists(DllPath()); } catch { return false; } }
 
+        // Borra el flujo alternativo ":Zone.Identifier" (Mark-of-the-Web) de un archivo.
+        private static void Unblock(string path)
+        {
+            try { if (!string.IsNullOrEmpty(path) && File.Exists(path)) Native.DeleteFile(path + ":Zone.Identifier"); }
+            catch { }
+        }
+
         // Intenta activar los sensores avanzados. Devuelve true si quedaron listos.
         public static bool Enable()
         {
@@ -478,6 +485,13 @@ namespace NautilusMotion.Monitor
             if (!DllPresent()) { Status = "dll_missing"; return false; }
             try
             {
+                // Quita el "Mark-of-the-Web" de las DLL propias. Al descargar el ZIP
+                // y extraerlo con el Explorador, Windows las marca como "de internet"
+                // y .NET se niega a cargarlas con LoadFrom. Desbloquearlas evita el fallo.
+                string dir = Path.GetDirectoryName(DllPath());
+                Unblock(DllPath());
+                Unblock(Path.Combine(dir, "HidSharp.dll"));
+
                 Assembly asm = Assembly.LoadFrom(DllPath());
                 Type tComputer = asm.GetType("LibreHardwareMonitor.Hardware.Computer");
                 _computer = Activator.CreateInstance(tComputer);
@@ -628,5 +642,9 @@ namespace NautilusMotion.Monitor
 
         [DllImport("kernel32.dll")]
         public static extern ulong GetTickCount64();
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool DeleteFile(string name);
     }
 }

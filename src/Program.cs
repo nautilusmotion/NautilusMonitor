@@ -42,6 +42,17 @@ namespace NautilusMotion.Monitor
                 return;
             }
 
+            // Prueba interna del modo avanzado (sin GUI): intenta activar los
+            // sensores y escribe el resultado.  Uso: --advtest <ruta_salida>
+            if (args != null && args.Length >= 2 && args[0] == "--advtest")
+            {
+                bool ok = false; string status = "?";
+                try { ok = AdvancedSensors.Enable(); status = AdvancedSensors.Status; }
+                catch (Exception ex) { status = "exc:" + ex.Message; }
+                try { File.WriteAllText(args[1], (ok ? "OK " : "FAIL ") + status); } catch { }
+                return;
+            }
+
             // Prueba interna de grabacion (sin GUI): graba N segundos con sensores
             // reales a un CSV.  Uso: --rectest <ruta> [segundos] [lang]
             if (args != null && args.Length >= 2 && args[0] == "--rectest")
