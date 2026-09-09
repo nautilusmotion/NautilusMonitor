@@ -59,6 +59,14 @@ namespace NautilusMotion.Monitor
             {"card.disk", new[]{"DISK ACTIVITY","ACTIVIDAD DEL DISCO","АКТИВНОСТЬ ДИСКА","ACTIVITÉ DISQUE","DATENTRÄGER","ATIVIDADE DO DISCO"}},
             {"card.net", new[]{"NETWORK","RED","СЕТЬ","RÉSEAU","NETZWERK","REDE"}},
             {"card.system", new[]{"SYSTEM","SISTEMA","СИСТЕМА","SYSTÈME","SYSTEM","SISTEMA"}},
+            {"card.power", new[]{"POWER","POTENCIA","МОЩНОСТЬ","PUISSANCE","LEISTUNG","POTÊNCIA"}},
+            {"card.volts", new[]{"VOLTAGES","VOLTAJES","НАПРЯЖЕНИЯ","TENSIONS","SPANNUNGEN","TENSÕES"}},
+            {"card.battery", new[]{"BATTERY","BATERÍA","БАТАРЕЯ","BATTERIE","AKKU","BATERIA"}},
+            {"bat.charging", new[]{"Charging","Cargando","Зарядка","En charge","Wird geladen","Carregando"}},
+            {"bat.onbattery", new[]{"On battery","Con batería","От батареи","Sur batterie","Akkubetrieb","Na bateria"}},
+            {"bat.plugged", new[]{"Plugged in","Enchufado","Подключено","Branché","Am Netz","Ligado à tomada"}},
+            {"lbl.commit", new[]{"Committed","Confirmada","Выделено","Validée","Zugesichert","Confirmada"}},
+            {"lbl.gpumem", new[]{"GPU memory","Memoria de GPU","Память ГП","Mémoire GPU","GPU-Speicher","Memória da GPU"}},
 
             // Etiquetas
             {"lbl.clock", new[]{"Clock","Reloj","Частота","Fréquence","Takt","Relógio"}},

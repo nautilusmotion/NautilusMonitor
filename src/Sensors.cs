@@ -20,6 +20,7 @@ namespace NautilusMotion.Monitor
     // ---- Lecturas puntuales ----
     public sealed class TempReading { public string Name; public double Celsius; }
     public sealed class FanReading  { public string Name; public int Rpm; }
+    public sealed class SensorReading { public string Name; public double Value; } // voltajes (V), potencia (W)
 
     // ---- Instantanea de una muestra ----
     public sealed class Snapshot
@@ -30,7 +31,10 @@ namespace NautilusMotion.Monitor
         public double RamUsedGB;
         public double RamTotalGB;
         public double RamUsedPct;
+        public double PageUsedGB = -1;          // fichero de paginacion en uso (-1 = desconocido)
+        public double PageTotalGB = -1;
         public double GpuLoadPct = -1;          // -1 = desconocida
+        public double GpuMemUsedMB = -1;        // memoria de GPU usada (-1 = desconocida)
         public double DiskActivePct = -1;       // -1 = desconocida
         public double DiskReadMBs = -1;
         public double DiskWriteMBs = -1;
@@ -38,8 +42,15 @@ namespace NautilusMotion.Monitor
         public double NetUpKBs;
         public int ProcCount;
         public TimeSpan Uptime;
+        // Bateria (portatiles / mini-PC). HasBattery=false en equipos sin bateria.
+        public bool HasBattery;
+        public int BatteryPercent = -1;
+        public bool BatteryCharging;
+        public bool BatteryAc;
         public List<TempReading> Temps = new List<TempReading>();
         public List<FanReading> Fans = new List<FanReading>();
+        public List<SensorReading> Volts = new List<SensorReading>();   // voltajes (modo avanzado)
+        public List<SensorReading> Powers = new List<SensorReading>();  // potencia W (modo avanzado)
     }
 
     // ---- Datos fijos del equipo (se leen una vez) ----
@@ -194,6 +205,26 @@ namespace NautilusMotion.Monitor
                     s.RamTotalGB = m.ullTotalPhys / 1073741824.0;
                     s.RamUsedGB = (m.ullTotalPhys - m.ullAvailPhys) / 1073741824.0;
                     s.RamUsedPct = m.dwMemoryLoad;
+                    s.PageTotalGB = m.ullTotalPageFile / 1073741824.0;
+                    s.PageUsedGB = (m.ullTotalPageFile - m.ullAvailPageFile) / 1073741824.0;
+                }
+            }
+            catch { }
+
+            // ---- Bateria (kernel32, independiente del idioma; nada en equipos sin bateria) ----
+            try
+            {
+                Native.SYSTEM_POWER_STATUS ps;
+                if (Native.GetSystemPowerStatus(out ps))
+                {
+                    bool noBattery = (ps.BatteryFlag & 128) != 0;
+                    if (!noBattery && ps.BatteryLifePercent != 255)
+                    {
+                        s.HasBattery = true;
+                        s.BatteryPercent = ps.BatteryLifePercent;
+                        s.BatteryCharging = (ps.BatteryFlag & 8) != 0;
+                        s.BatteryAc = ps.ACLineStatus == 1;
+                    }
                 }
             }
             catch { }
@@ -578,8 +609,14 @@ namespace NautilusMotion.Monitor
                             s.Temps.Add(new TempReading { Name = Trim(hwName, name), Celsius = Math.Round(val, 0) });
                         else if (type == "Fan" && val > 0)
                             s.Fans.Add(new FanReading { Name = Trim(hwName, name), Rpm = (int)Math.Round(val) });
+                        else if (type == "Voltage" && val > 0 && val < 24)
+                            s.Volts.Add(new SensorReading { Name = Trim(hwName, name), Value = Math.Round(val, 3) });
+                        else if (type == "Power" && val > 0 && val < 2000)
+                            s.Powers.Add(new SensorReading { Name = Trim(hwName, name), Value = Math.Round(val, 1) });
                         else if (type == "Load" && isGpu && name.IndexOf("Core", StringComparison.OrdinalIgnoreCase) >= 0)
                             { if (val > gpuLoadMax) gpuLoadMax = val; }
+                        else if (type == "SmallData" && isGpu && val > 0 && name.IndexOf("Memory Used", StringComparison.OrdinalIgnoreCase) >= 0)
+                            { if (val > s.GpuMemUsedMB) s.GpuMemUsedMB = Math.Round(val, 0); }
                     }
 
                 var subs = (System.Collections.IEnumerable)_hwSubHw.GetValue(hw, null);
@@ -663,5 +700,20 @@ namespace NautilusMotion.Monitor
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool DeleteFile(string name);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SYSTEM_POWER_STATUS
+        {
+            public byte ACLineStatus;        // 0=con bateria, 1=enchufado, 255=desconocido
+            public byte BatteryFlag;         // bit3(8)=cargando, bit7(128)=sin bateria, 255=desconocido
+            public byte BatteryLifePercent;  // 0-100, 255=desconocido
+            public byte SystemStatusFlag;
+            public int BatteryLifeTime;
+            public int BatteryFullLifeTime;
+        }
+
+        [DllImport("kernel32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS status);
     }
 }

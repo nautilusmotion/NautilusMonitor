@@ -10,7 +10,12 @@
 param(
     [switch]$NoAdvanced,        # omite la descarga de LibreHardwareMonitor
     [switch]$RefreshAdvanced,   # vuelve a descargar aunque ya exista
-    [string]$LhmVersion = '0.9.4'  # version de LibreHardwareMonitorLib (layout net472 simple: Lib + HidSharp)
+    [string]$LhmVersion = '0.9.4', # version de LibreHardwareMonitorLib (layout net472 simple: Lib + HidSharp)
+    # ---- Firma de codigo (opcional): si no se indica certificado, NO se firma ----
+    [string]$SignThumbprint = '',  # huella del certificado en el almacen (Cert:\CurrentUser\My o LocalMachine\My)
+    [string]$SignPfx = '',         # o ruta a un .pfx
+    [string]$SignPfxPassword = '', # contrasena del .pfx (si la tiene)
+    [string]$TimestampUrl = 'http://timestamp.sectigo.com'  # sellado de tiempo (sobrevive a la caducidad del cert)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,6 +67,37 @@ if ($LASTEXITCODE -ne 0 -or -not (Test-Path $out)) {
 }
 $kb = [int]((Get-Item $out).Length / 1024)
 Write-Host "OK - Compilado: $out ($kb KB)" -ForegroundColor Green
+
+# ---------------------------------------------------------------------------
+#  Firma de codigo (opcional). Con -SignThumbprint <huella> o -SignPfx <ruta>.
+#  Sin certificado no se firma (comportamiento por defecto). Usa el cmdlet
+#  Set-AuthenticodeSignature, asi que no necesita el SDK de Windows (signtool).
+# ---------------------------------------------------------------------------
+function Sign-Exe {
+    param([string]$Path)
+    $cert = $null
+    if ($SignThumbprint) {
+        $cert = Get-ChildItem "Cert:\CurrentUser\My\$SignThumbprint" -ErrorAction SilentlyContinue
+        if (-not $cert) { $cert = Get-ChildItem "Cert:\LocalMachine\My\$SignThumbprint" -ErrorAction SilentlyContinue }
+        if (-not $cert) { Write-Host "AVISO: no se encontro el certificado con huella $SignThumbprint." -ForegroundColor Yellow; return }
+    }
+    elseif ($SignPfx) {
+        if (-not (Test-Path $SignPfx)) { Write-Host "AVISO: no se encontro el PFX '$SignPfx'." -ForegroundColor Yellow; return }
+        try { $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($SignPfx, $SignPfxPassword) }
+        catch { Write-Host ("AVISO: no se pudo abrir el PFX (" + $_.Exception.Message + ").") -ForegroundColor Yellow; return }
+    }
+    else {
+        Write-Host "Firma: omitida (sin certificado). Pasa -SignThumbprint o -SignPfx para firmar." -ForegroundColor DarkGray
+        return
+    }
+    try {
+        $res = Set-AuthenticodeSignature -FilePath $Path -Certificate $cert -HashAlgorithm SHA256 -TimestampServer $TimestampUrl -ErrorAction Stop
+        if ($res.Status -eq 'Valid') { Write-Host ("Firmado OK - " + $cert.Subject) -ForegroundColor Green }
+        else { Write-Host ("Firma con estado '" + $res.Status + "': " + $res.StatusMessage) -ForegroundColor Yellow }
+    }
+    catch { Write-Host ("AVISO: fallo al firmar (" + $_.Exception.Message + ").") -ForegroundColor Yellow }
+}
+Sign-Exe $out
 
 # ---------------------------------------------------------------------------
 #  2) Sensores avanzados (opcional): LibreHardwareMonitorLib.dll + dependencias

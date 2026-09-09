@@ -38,9 +38,10 @@ namespace NautilusMotion.Monitor
         private TextBlock[] _corePcts;
 
         // Fichas dinamicas
-        private StackPanel _tempsHost, _fansHost;
+        private StackPanel _tempsHost, _fansHost, _voltsHost, _powersHost;
+        private Border _voltsCard, _powerCard, _batCard;
         private BarMeter _diskBar;
-        private TextBlock _diskRWTx, _netDownTx, _netUpTx, _uptimeTx, _procTx, _osTx, _boardTx;
+        private TextBlock _diskRWTx, _netDownTx, _netUpTx, _uptimeTx, _procTx, _osTx, _boardTx, _commitTx, _batTx;
 
         // Sensores avanzados
         private Border _advChip;
@@ -205,6 +206,12 @@ namespace NautilusMotion.Monitor
             s.Fans.Add(new FanReading { Name = "CPU", Rpm = 1180 });
             s.Fans.Add(new FanReading { Name = "Chasis #1", Rpm = 900 });
             s.Fans.Add(new FanReading { Name = "GPU", Rpm = 1420 });
+            s.Powers.Add(new SensorReading { Name = "CPU Package", Value = 42.5 });
+            s.Powers.Add(new SensorReading { Name = "GPU", Value = 118.3 });
+            s.Volts.Add(new SensorReading { Name = "CPU · Vcore", Value = 1.256 });
+            s.Volts.Add(new SensorReading { Name = "+12V", Value = 12.096 });
+            s.Volts.Add(new SensorReading { Name = "+5V", Value = 5.04 });
+            s.PageUsedGB = 12.4; s.PageTotalGB = 32.0;
 
             AdvancedSensors.Status = "ok";
             UpdateUi(s);
@@ -285,6 +292,7 @@ namespace NautilusMotion.Monitor
 
             var leftCol = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
             leftCol.Children.Add(BuildCpuCard());
+            leftCol.Children.Add(BuildVoltsCard());
             leftCol.Children.Add(BuildDiskCard());
             leftCol.Children.Add(BuildNetCard());
             Grid.SetColumn(leftCol, 0);
@@ -293,6 +301,8 @@ namespace NautilusMotion.Monitor
             var rightCol = new StackPanel { Margin = new Thickness(6, 0, 0, 0) };
             rightCol.Children.Add(BuildTempsCard());
             rightCol.Children.Add(BuildFansCard());
+            rightCol.Children.Add(BuildPowerCard());
+            rightCol.Children.Add(BuildBatteryCard());
             rightCol.Children.Add(BuildSystemCard());
             Grid.SetColumn(rightCol, 1);
             g.Children.Add(rightCol);
@@ -426,6 +436,39 @@ namespace NautilusMotion.Monitor
             return card;
         }
 
+        private UIElement BuildVoltsCard()
+        {
+            _voltsCard = Card();
+            var sp = (StackPanel)_voltsCard.Child;
+            sp.Children.Add(Header(Loc.T("card.volts")));
+            _voltsHost = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
+            sp.Children.Add(_voltsHost);
+            _voltsCard.Visibility = Visibility.Collapsed;   // solo en modo avanzado con datos
+            return _voltsCard;
+        }
+
+        private UIElement BuildPowerCard()
+        {
+            _powerCard = Card();
+            var sp = (StackPanel)_powerCard.Child;
+            sp.Children.Add(Header(Loc.T("card.power")));
+            _powersHost = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
+            sp.Children.Add(_powersHost);
+            _powerCard.Visibility = Visibility.Collapsed;
+            return _powerCard;
+        }
+
+        private UIElement BuildBatteryCard()
+        {
+            _batCard = Card();
+            var sp = (StackPanel)_batCard.Child;
+            sp.Children.Add(Header(Loc.T("card.battery")));
+            _batTx = new TextBlock { Text = "--", Foreground = Theme.TitleText, FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 2, 0, 0) };
+            sp.Children.Add(_batTx);
+            _batCard.Visibility = Visibility.Collapsed;      // solo si hay bateria
+            return _batCard;
+        }
+
         private UIElement BuildDiskCard()
         {
             var card = Card();
@@ -455,9 +498,10 @@ namespace NautilusMotion.Monitor
             var card = Card();
             var sp = (StackPanel)card.Child;
             sp.Children.Add(Header(Loc.T("card.system")));
-            _osTx = KvValue(); _boardTx = KvValue(); _uptimeTx = KvValue(); _procTx = KvValue();
+            _osTx = KvValue(); _boardTx = KvValue(); _uptimeTx = KvValue(); _procTx = KvValue(); _commitTx = KvValue();
             sp.Children.Add(Kv(Loc.T("lbl.os"), _osTx));
             sp.Children.Add(Kv(Loc.T("lbl.board"), _boardTx));
+            sp.Children.Add(Kv(Loc.T("lbl.commit"), _commitTx));
             sp.Children.Add(Kv(Loc.T("lbl.uptime"), _uptimeTx));
             sp.Children.Add(Kv(Loc.T("lbl.processes"), _procTx));
             return card;
@@ -572,6 +616,10 @@ namespace NautilusMotion.Monitor
                 foreach (FanReading f in s.Fans)
                     _fansHost.Children.Add(FanRow(f));
 
+            // Potencia y voltajes (solo modo avanzado; la ficha se oculta si no hay datos)
+            UpdateSensorCard(_powerCard, _powersHost, s.Powers, " W", "0.0");
+            UpdateSensorCard(_voltsCard, _voltsHost, s.Volts, " V", "0.000");
+
             // Disco (ficha)
             if (s.DiskActivePct >= 0)
             {
@@ -591,8 +639,45 @@ namespace NautilusMotion.Monitor
             _netUpTx.Text = Rate(s.NetUpKBs);
 
             // Sistema
+            _commitTx.Text = s.PageTotalGB > 0 ? F1(s.PageUsedGB) + " / " + F1(s.PageTotalGB) + " GB" : "--";
             _uptimeTx.Text = Uptime(s.Uptime);
             _procTx.Text = s.ProcCount > 0 ? s.ProcCount.ToString() : "--";
+
+            // Batería (solo si el equipo tiene)
+            if (_batCard != null)
+            {
+                if (s.HasBattery)
+                {
+                    _batCard.Visibility = Visibility.Visible;
+                    string st = s.BatteryCharging ? Loc.T("bat.charging") : (s.BatteryAc ? Loc.T("bat.plugged") : Loc.T("bat.onbattery"));
+                    _batTx.Text = (s.BatteryPercent >= 0 ? s.BatteryPercent + "%  ·  " : "") + st;
+                    bool low = !s.BatteryCharging && !s.BatteryAc && s.BatteryPercent >= 0 && s.BatteryPercent <= 20;
+                    _batTx.Foreground = low ? Theme.Warm : Theme.TitleText;
+                }
+                else _batCard.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void UpdateSensorCard(Border card, StackPanel host, System.Collections.Generic.List<SensorReading> items, string unit, string fmt)
+        {
+            if (card == null || host == null) return;
+            if (items == null || items.Count == 0) { card.Visibility = Visibility.Collapsed; return; }
+            card.Visibility = Visibility.Visible;
+            host.Children.Clear();
+            foreach (SensorReading r in items)
+                host.Children.Add(ValueRow(r.Name, r.Value.ToString(fmt, Inv) + unit));
+        }
+
+        private UIElement ValueRow(string name, string value)
+        {
+            var g = new Grid { Margin = new Thickness(0, 5, 0, 0) };
+            g.ColumnDefinitions.Add(Col(new GridLength(1, GridUnitType.Star)));
+            g.ColumnDefinitions.Add(Col(GridLength.Auto));
+            var n = new TextBlock { Text = name, Foreground = Theme.BodyText, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(n, 0); g.Children.Add(n);
+            var v = new TextBlock { Text = value, Foreground = Theme.TitleText, FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+            Grid.SetColumn(v, 1); g.Children.Add(v);
+            return g;
         }
 
         private string GpuTempSmall(Snapshot s)
@@ -907,8 +992,8 @@ namespace NautilusMotion.Monitor
         {
             int rows = (coreCount + 1) / 2;          // 2 columnas de barras por-núcleo
             if (rows < 1) rows = 1;
-            double leftCol = 410 + rows * 19;         // ficha CPU (base + filas) + disco + red
-            double content = Math.Max(leftCol, 480);  // vs. columna derecha (temps + vent. + sistema)
+            double leftCol = 520 + rows * 19;         // ficha CPU (base + filas) + voltajes + disco + red
+            double content = Math.Max(leftCol, 660);  // vs. columna derecha (temps + vent. + potencia + sistema)
             return 478 + content;                     // + barra de título + héroe + gauges + pie
         }
 
