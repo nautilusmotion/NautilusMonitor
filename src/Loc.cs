@@ -52,6 +52,7 @@ namespace NautilusMotion.Monitor
             {"g.disk", new[]{"DISK","DISCO","ДИСК","DISQUE","DATENTR.","DISCO"}},
 
             // Cabeceras de fichas
+            {"card.history", new[]{"HISTORY  ·  LAST 2 MIN","HISTORIAL  ·  ÚLTIMOS 2 MIN","ИСТОРИЯ  ·  ПОСЛЕДНИЕ 2 МИН","HISTORIQUE  ·  2 DERNIÈRES MIN","VERLAUF  ·  LETZTE 2 MIN","HISTÓRICO  ·  ÚLTIMOS 2 MIN"}},
             {"card.cpu", new[]{"PROCESSOR","PROCESADOR","ПРОЦЕССОР","PROCESSEUR","PROZESSOR","PROCESSADOR"}},
             {"card.percore", new[]{"PER-CORE USAGE","USO POR NÚCLEO","ЗАГРУЗКА ПО ЯДРАМ","UTILISATION PAR CŒUR","AUSLASTUNG JE KERN","USO POR NÚCLEO"}},
             {"card.temps", new[]{"TEMPERATURES","TEMPERATURAS","ТЕМПЕРАТУРЫ","TEMPÉRATURES","TEMPERATUREN","TEMPERATURAS"}},

@@ -31,6 +31,9 @@ namespace NautilusMotion.Monitor
         // Gauges
         private Gauge _gCpu, _gGpu, _gRam, _gDisk;
 
+        // Gráfica de historial (CPU / GPU / RAM)
+        private LineChart _histChart;
+
         // CPU
         private TextBlock _cpuNameTx, _clockTx, _coresTx, _coreNote;
         private UniformGrid _coreHost;
@@ -213,6 +216,19 @@ namespace NautilusMotion.Monitor
             s.Volts.Add(new SensorReading { Name = "+5V", Value = 5.04 });
             s.PageUsedGB = 12.4; s.PageTotalGB = 32.0;
 
+            // Semilla del historial (curvas realistas para la captura)
+            if (_histChart != null)
+            {
+                var rnd = new Random(7);
+                for (int i = 0; i < 120; i++)
+                {
+                    double cpu = 35 + 18 * Math.Sin(i / 9.0) + rnd.Next(-6, 6);
+                    double gpu = 42 + 22 * Math.Sin(i / 13.0 + 1) + rnd.Next(-5, 5);
+                    double ram = 60 + 4 * Math.Sin(i / 20.0) + rnd.Next(-2, 2);
+                    _histChart.Push(new double[] { cpu, gpu, ram });
+                }
+            }
+
             AdvancedSensors.Status = "ok";
             UpdateUi(s);
             MarkAdvOn();
@@ -284,6 +300,7 @@ namespace NautilusMotion.Monitor
 
             col.Children.Add(BuildAdvBar());
             col.Children.Add(BuildGaugeCard());
+            col.Children.Add(BuildHistoryCard());
 
             // Rejilla de dos columnas para las fichas
             var g = new Grid { Margin = new Thickness(0, 4, 0, 0) };
@@ -382,6 +399,38 @@ namespace NautilusMotion.Monitor
             host.Children.Add(child);
             b.Child = host;
             return b;
+        }
+
+        private UIElement BuildHistoryCard()
+        {
+            var card = Card();
+            card.Margin = new Thickness(0, 0, 0, 12);
+            var sp = (StackPanel)card.Child;
+
+            // Cabecera + leyenda en la misma fila
+            var head = new Grid();
+            head.ColumnDefinitions.Add(Col(new GridLength(1, GridUnitType.Star)));
+            head.ColumnDefinitions.Add(Col(GridLength.Auto));
+            head.Children.Add(Header(Loc.T("card.history")));
+            var legend = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            legend.Children.Add(LegendItem("CPU", Theme.AccentBrush));
+            legend.Children.Add(LegendItem("GPU", Theme.Warm));
+            legend.Children.Add(LegendItem("RAM", Theme.Cool));
+            Grid.SetColumn(legend, 1);
+            head.Children.Add(legend);
+            sp.Children.Add(head);
+
+            _histChart = new LineChart(120, 100, new Brush[] { Theme.AccentBrush, Theme.Warm, Theme.Cool }, 150) { Margin = new Thickness(0, 8, 0, 0) };
+            sp.Children.Add(_histChart);
+            return card;
+        }
+
+        private UIElement LegendItem(string label, Brush color)
+        {
+            var s = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            s.Children.Add(new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = color, VerticalAlignment = VerticalAlignment.Center });
+            s.Children.Add(new TextBlock { Text = label, Foreground = Theme.Muted, FontSize = 11, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            return s;
         }
 
         private UIElement BuildCpuCard()
@@ -576,6 +625,10 @@ namespace NautilusMotion.Monitor
                 _gDisk.SetValue(s.DiskActivePct, F0(s.DiskActivePct) + "%", "");
             else
                 _gDisk.SetUnknown(Loc.T("na"));
+
+            // Historial (CPU / GPU / RAM)
+            if (_histChart != null)
+                _histChart.Push(new double[] { s.CpuTotal, s.GpuLoadPct >= 0 ? s.GpuLoadPct : double.NaN, s.RamUsedPct });
 
             // Por-nucleo: crea las barras la primera vez (o si cambia el recuento) segun lo muestreado
             if (s.CpuCores != null && s.CpuCores.Length > 0)
@@ -994,7 +1047,7 @@ namespace NautilusMotion.Monitor
             if (rows < 1) rows = 1;
             double leftCol = 520 + rows * 19;         // ficha CPU (base + filas) + voltajes + disco + red
             double content = Math.Max(leftCol, 660);  // vs. columna derecha (temps + vent. + potencia + sistema)
-            return 478 + content;                     // + barra de título + héroe + gauges + pie
+            return 658 + content;                     // barra título + héroe + gauges + historial + pie
         }
 
         private void SizeToCores(int coreCount)
