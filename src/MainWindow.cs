@@ -225,7 +225,8 @@ namespace NautilusMotion.Monitor
                     double cpu = 35 + 18 * Math.Sin(i / 9.0) + rnd.Next(-6, 6);
                     double gpu = 42 + 22 * Math.Sin(i / 13.0 + 1) + rnd.Next(-5, 5);
                     double ram = 60 + 4 * Math.Sin(i / 20.0) + rnd.Next(-2, 2);
-                    _histChart.Push(new double[] { cpu, gpu, ram });
+                    double temp = 56 + 8 * Math.Sin(i / 11.0 + 2) + rnd.Next(-2, 2);
+                    _histChart.Push(new double[] { cpu, gpu, ram, temp });
                 }
             }
 
@@ -416,11 +417,12 @@ namespace NautilusMotion.Monitor
             legend.Children.Add(LegendItem("CPU", Theme.AccentBrush));
             legend.Children.Add(LegendItem("GPU", Theme.Warm));
             legend.Children.Add(LegendItem("RAM", Theme.Cool));
+            legend.Children.Add(LegendItem("°C", Theme.ChartTemp));
             Grid.SetColumn(legend, 1);
             head.Children.Add(legend);
             sp.Children.Add(head);
 
-            _histChart = new LineChart(120, 100, new Brush[] { Theme.AccentBrush, Theme.Warm, Theme.Cool }, 150) { Margin = new Thickness(0, 8, 0, 0) };
+            _histChart = new LineChart(120, 100, new Brush[] { Theme.AccentBrush, Theme.Warm, Theme.Cool, Theme.ChartTemp }, 150) { Margin = new Thickness(0, 8, 0, 0) };
             sp.Children.Add(_histChart);
             return card;
         }
@@ -626,9 +628,9 @@ namespace NautilusMotion.Monitor
             else
                 _gDisk.SetUnknown(Loc.T("na"));
 
-            // Historial (CPU / GPU / RAM)
+            // Historial (CPU % / GPU % / RAM % / Temp CPU °C, todo en eje 0-100)
             if (_histChart != null)
-                _histChart.Push(new double[] { s.CpuTotal, s.GpuLoadPct >= 0 ? s.GpuLoadPct : double.NaN, s.RamUsedPct });
+                _histChart.Push(new double[] { s.CpuTotal, s.GpuLoadPct >= 0 ? s.GpuLoadPct : double.NaN, s.RamUsedPct, CpuTemp(s) });
 
             // Por-nucleo: crea las barras la primera vez (o si cambia el recuento) segun lo muestreado
             if (s.CpuCores != null && s.CpuCores.Length > 0)
@@ -739,6 +741,16 @@ namespace NautilusMotion.Monitor
                 if (t.Name != null && t.Name.IndexOf("GPU", StringComparison.OrdinalIgnoreCase) >= 0)
                     return F0(t.Celsius) + "°C";
             return "";
+        }
+
+        // Temperatura de CPU para la curva del historial (NaN si no hay ninguna).
+        private static double CpuTemp(Snapshot s)
+        {
+            foreach (TempReading t in s.Temps)
+                if (t.Name != null && t.Name.IndexOf("CPU", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return t.Celsius;
+            if (s.Temps.Count > 0) return s.Temps[0].Celsius;
+            return double.NaN;
         }
 
         // ---------------------------------------------------------------

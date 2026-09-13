@@ -47,6 +47,9 @@ namespace NautilusMotion.Monitor
         public static readonly Brush Warm = S("#E8A21C"); // ambar
         public static readonly Brush Hot  = S("#E11420"); // rojo de marca
 
+        // Curva de temperatura en el historial (cian, para distinguirla de las cargas)
+        public static readonly Brush ChartTemp = S("#4EC9E8");
+
         public static readonly FontFamily Font = new FontFamily("Segoe UI");
         public static readonly FontFamily Mono = new FontFamily("Consolas");
 
