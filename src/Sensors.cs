@@ -28,6 +28,7 @@ namespace NautilusMotion.Monitor
         public double CpuTotal;                 // 0-100
         public double[] CpuCores;               // por procesador logico (puede ser null)
         public double CpuClockMhz;              // efectiva (0 = desconocida)
+        public double CpuClockLhm = -1;         // reloj real por LHM (si hay modo avanzado)
         public double RamUsedGB;
         public double RamTotalGB;
         public double RamUsedPct;
@@ -163,6 +164,9 @@ namespace NautilusMotion.Monitor
         // Contadores de rendimiento opcionales (pueden fallar segun el idioma/version)
         private PerformanceCounter _diskActive, _diskRead, _diskWrite;
         private bool _diskTried, _diskOk;
+        // Reloj efectivo en vivo (driverless): % rendimiento x frecuencia nominal
+        private PerformanceCounter _perfPerf, _perfFreq;
+        private bool _perfOk;
 
         public void Warmup()
         {
@@ -172,6 +176,19 @@ namespace NautilusMotion.Monitor
             _netPrevTime = DateTime.UtcNow;
             _netPrimed = true;
             TryInitDisk();
+            TryInitPerf();
+        }
+
+        private void TryInitPerf()
+        {
+            try
+            {
+                _perfPerf = new PerformanceCounter("Processor Information", "% Processor Performance", "_Total");
+                _perfFreq = new PerformanceCounter("Processor Information", "Processor Frequency", "_Total");
+                _perfPerf.NextValue(); _perfFreq.NextValue(); // ceba
+                _perfOk = true;
+            }
+            catch { _perfOk = false; }
         }
 
         public Snapshot Sample()
@@ -199,8 +216,23 @@ namespace NautilusMotion.Monitor
             }
             if (idle != null) { _idlePrev = idle; _kernPrev = kern; _userPrev = user; _cpuPrimed = true; }
 
-            // ---- Reloj efectivo (powrprof, independiente del idioma) ----
-            s.CpuClockMhz = ReadCurrentMhz();
+            // ---- Reloj efectivo en vivo ----
+            // CallNtPowerInformation.CurrentMhz suele quedarse fijo (base) en CPUs
+            // modernas (Speed Shift/CPPC); el contador "% rendimiento x frecuencia
+            // nominal" sí refleja el turbo en tiempo real. LHM lo afina más abajo.
+            double clk = ReadCurrentMhz();
+            if (_perfOk)
+            {
+                try
+                {
+                    double perf = _perfPerf.NextValue();  // % del nominal (puede pasar de 100 en turbo)
+                    double freq = _perfFreq.NextValue();  // MHz nominales
+                    double eff = freq * perf / 100.0;
+                    if (eff > 100) clk = eff;
+                }
+                catch { }
+            }
+            s.CpuClockMhz = clk;
 
             // ---- RAM (kernel32, independiente del idioma) ----
             try
@@ -278,6 +310,9 @@ namespace NautilusMotion.Monitor
             {
                 LiteTemps.Read(s); // WMI ACPI + nvidia-smi (best-effort)
             }
+
+            // El reloj real por nucleo de LHM (en vivo) tiene prioridad si esta disponible.
+            if (s.CpuClockLhm > 0) s.CpuClockMhz = s.CpuClockLhm;
 
             return s;
         }
@@ -628,10 +663,17 @@ namespace NautilusMotion.Monitor
                             s.Powers.Add(new SensorReading { Name = Trim(hwName, name), Value = Math.Round(val, 1) });
                             if (isGpu && val > s.GpuPowerW) s.GpuPowerW = Math.Round(val, 1);
                         }
-                        else if (type == "Clock" && isGpu && val > 0)
+                        else if (type == "Clock" && val > 0)
                         {
-                            if (name.IndexOf("Core", StringComparison.OrdinalIgnoreCase) >= 0 && s.GpuCoreClockMhz < 0) s.GpuCoreClockMhz = Math.Round(val, 0);
-                            else if (name.IndexOf("Memory", StringComparison.OrdinalIgnoreCase) >= 0 && s.GpuMemClockMhz < 0) s.GpuMemClockMhz = Math.Round(val, 0);
+                            if (isGpu)
+                            {
+                                if (name.IndexOf("Core", StringComparison.OrdinalIgnoreCase) >= 0 && s.GpuCoreClockMhz < 0) s.GpuCoreClockMhz = Math.Round(val, 0);
+                                else if (name.IndexOf("Memory", StringComparison.OrdinalIgnoreCase) >= 0 && s.GpuMemClockMhz < 0) s.GpuMemClockMhz = Math.Round(val, 0);
+                            }
+                            else if (hwType.IndexOf("Cpu", StringComparison.OrdinalIgnoreCase) >= 0 && name.IndexOf("Core", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                if (val > s.CpuClockLhm) s.CpuClockLhm = Math.Round(val, 0); // máx núcleo activo (turbo), en vivo
+                            }
                         }
                         else if (type == "Load" && isGpu && name.IndexOf("Core", StringComparison.OrdinalIgnoreCase) >= 0)
                             { if (val > gpuLoadMax) gpuLoadMax = val; }
