@@ -42,8 +42,8 @@ namespace NautilusMotion.Monitor
         private TextBlock[] _corePcts;
 
         // Fichas dinamicas
-        private StackPanel _tempsHost, _fansHost, _voltsHost, _powersHost, _diskHealthHost;
-        private Border _voltsCard, _powerCard, _batCard;
+        private StackPanel _tempsHost, _fansHost, _voltsHost, _powersHost, _diskHealthHost, _gpuHost;
+        private Border _voltsCard, _powerCard, _batCard, _gpuCard;
         private BarMeter _diskBar;
         private TextBlock _diskRWTx, _netDownTx, _netUpTx, _uptimeTx, _procTx, _osTx, _boardTx, _commitTx, _batTx;
 
@@ -74,9 +74,9 @@ namespace NautilusMotion.Monitor
             LoadAppIcon();
             if (Program.DemoMode)
             {
-                // Modo captura: tamaño fijo para screenshots deterministas.
+                // Modo captura: alto amplio (Windows lo limita al de la pantalla).
                 Width = 980;
-                Height = 850;
+                Height = 1400;
                 WindowStartupLocation = WindowStartupLocation.CenterScreen;
             }
             else
@@ -241,6 +241,8 @@ namespace NautilusMotion.Monitor
             s.Volts.Add(new SensorReading { Name = "+12V", Value = 12.096 });
             s.Volts.Add(new SensorReading { Name = "+5V", Value = 5.04 });
             s.PageUsedGB = 12.4; s.PageTotalGB = 32.0;
+            s.GpuTempC = 62; s.GpuCoreClockMhz = 1800; s.GpuMemClockMhz = 1750; s.GpuPowerW = 118.3; s.GpuFanRpm = 1420;
+            s.GpuMemUsedMB = 2100; s.GpuMemTotalMB = 8192;
 
             // Semilla del historial (curvas realistas para la captura)
             if (_histChart != null)
@@ -341,6 +343,7 @@ namespace NautilusMotion.Monitor
 
             var leftCol = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
             leftCol.Children.Add(BuildCpuCard());
+            leftCol.Children.Add(BuildGpuCard());
             leftCol.Children.Add(BuildVoltsCard());
             leftCol.Children.Add(BuildDiskCard());
             leftCol.Children.Add(BuildNetCard());
@@ -650,6 +653,62 @@ namespace NautilusMotion.Monitor
             return _voltsCard;
         }
 
+        private UIElement BuildGpuCard()
+        {
+            _gpuCard = Card();
+            var sp = (StackPanel)_gpuCard.Child;
+            sp.Children.Add(Header(Loc.T("card.gpu")));
+            _gpuHost = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
+            sp.Children.Add(_gpuHost);
+            _gpuCard.Visibility = Visibility.Collapsed;      // se muestra si hay GPU
+            return _gpuCard;
+        }
+
+        private void UpdateGpu(Snapshot s)
+        {
+            if (_gpuCard == null || _gpuHost == null) return;
+            string name = _info != null ? _info.GpuName : "";
+            double temp = s.GpuTempC >= 0 ? s.GpuTempC : GpuTempVal(s);
+
+            _gpuHost.Children.Clear();
+            if (!string.IsNullOrEmpty(name))
+                _gpuHost.Children.Add(new TextBlock { Text = name, Foreground = Theme.TitleText, FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) });
+
+            int rows = 0;
+            if (s.GpuLoadPct >= 0) { _gpuHost.Children.Add(ValueRow(Loc.T("lbl.usage"), F0(s.GpuLoadPct) + "%")); rows++; }
+            if (temp >= 0) { _gpuHost.Children.Add(ValueRow(Loc.T("lbl.temp"), F0(temp) + " °C")); rows++; }
+            if (s.GpuCoreClockMhz >= 0 || s.GpuMemClockMhz >= 0)
+            {
+                string clk = "";
+                if (s.GpuCoreClockMhz >= 0) clk = F0(s.GpuCoreClockMhz) + " MHz";
+                if (s.GpuMemClockMhz >= 0) clk += (clk.Length > 0 ? "  ·  " : "") + F0(s.GpuMemClockMhz) + " MHz";
+                _gpuHost.Children.Add(ValueRow(Loc.T("lbl.clock"), clk)); rows++;
+            }
+            if (s.GpuMemUsedMB >= 0)
+            {
+                string mem = s.GpuMemTotalMB > 0 ? MemLabel(s.GpuMemUsedMB) + " / " + MemLabel(s.GpuMemTotalMB) : MemLabel(s.GpuMemUsedMB);
+                _gpuHost.Children.Add(ValueRow(Loc.T("lbl.memory"), mem)); rows++;
+                if (s.GpuMemTotalMB > 0)
+                {
+                    var bar = new BarMeter(8) { Margin = new Thickness(0, 6, 0, 0) };
+                    bar.SetValue(s.GpuMemUsedMB / s.GpuMemTotalMB * 100.0, Theme.AccentBrush);
+                    _gpuHost.Children.Add(bar);
+                }
+            }
+            if (s.GpuPowerW >= 0) { _gpuHost.Children.Add(ValueRow(Loc.T("lbl.power"), s.GpuPowerW.ToString("0.0", Inv) + " W")); rows++; }
+            if (s.GpuFanRpm >= 0) { _gpuHost.Children.Add(ValueRow(Loc.T("lbl.fan"), s.GpuFanRpm + " RPM")); rows++; }
+
+            if (string.IsNullOrEmpty(name) && rows == 0) { _gpuCard.Visibility = Visibility.Collapsed; return; }
+            _gpuCard.Visibility = Visibility.Visible;
+            if (rows == 0) _gpuHost.Children.Add(NoneNote(Loc.T("na")));
+        }
+
+        private static string MemLabel(double mb)
+        {
+            if (mb >= 1024) return (mb / 1024.0).ToString("0.0", Inv) + " GB";
+            return F0(mb) + " MB";
+        }
+
         private UIElement BuildPowerCard()
         {
             _powerCard = Card();
@@ -791,6 +850,9 @@ namespace NautilusMotion.Monitor
                 _legVals[2].Text = F0(s.RamUsedPct) + "%";
                 _legVals[3].Text = double.IsNaN(ctemp) ? "--" : F0(ctemp) + "°C";
             }
+
+            // Ficha GPU dedicada
+            UpdateGpu(s);
 
             // Por-nucleo: crea las barras la primera vez (o si cambia el recuento) segun lo muestreado
             if (s.CpuCores != null && s.CpuCores.Length > 0)

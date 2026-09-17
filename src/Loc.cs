@@ -54,6 +54,12 @@ namespace NautilusMotion.Monitor
             // Cabeceras de fichas
             {"card.history", new[]{"HISTORY  ·  LAST 2 MIN","HISTORIAL  ·  ÚLTIMOS 2 MIN","ИСТОРИЯ  ·  ПОСЛЕДНИЕ 2 МИН","HISTORIQUE  ·  2 DERNIÈRES MIN","VERLAUF  ·  LETZTE 2 MIN","HISTÓRICO  ·  ÚLTIMOS 2 MIN"}},
             {"card.cpu", new[]{"PROCESSOR","PROCESADOR","ПРОЦЕССОР","PROCESSEUR","PROZESSOR","PROCESSADOR"}},
+            {"card.gpu", new[]{"GRAPHICS","GRÁFICOS","ГРАФИКА","CARTE GRAPHIQUE","GRAFIK","GRÁFICOS"}},
+            {"lbl.usage", new[]{"Usage","Uso","Загрузка","Utilisation","Auslastung","Uso"}},
+            {"lbl.temp", new[]{"Temperature","Temperatura","Температура","Température","Temperatur","Temperatura"}},
+            {"lbl.memory", new[]{"Memory","Memoria","Память","Mémoire","Speicher","Memória"}},
+            {"lbl.power", new[]{"Power","Potencia","Мощность","Puissance","Leistung","Potência"}},
+            {"lbl.fan", new[]{"Fan","Ventilador","Вентилятор","Ventilateur","Lüfter","Ventoinha"}},
             {"card.percore", new[]{"PER-CORE USAGE","USO POR NÚCLEO","ЗАГРУЗКА ПО ЯДРАМ","UTILISATION PAR CŒUR","AUSLASTUNG JE KERN","USO POR NÚCLEO"}},
             {"card.temps", new[]{"TEMPERATURES","TEMPERATURAS","ТЕМПЕРАТУРЫ","TEMPÉRATURES","TEMPERATUREN","TEMPERATURAS"}},
             {"card.fans", new[]{"FANS","VENTILADORES","ВЕНТИЛЯТОРЫ","VENTILATEURS","LÜFTER","VENTOINHAS"}},

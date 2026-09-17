@@ -35,6 +35,12 @@ namespace NautilusMotion.Monitor
         public double PageTotalGB = -1;
         public double GpuLoadPct = -1;          // -1 = desconocida
         public double GpuMemUsedMB = -1;        // memoria de GPU usada (-1 = desconocida)
+        public double GpuMemTotalMB = -1;
+        public double GpuTempC = -1;
+        public double GpuCoreClockMhz = -1;
+        public double GpuMemClockMhz = -1;
+        public double GpuPowerW = -1;
+        public int GpuFanRpm = -1;
         public double DiskActivePct = -1;       // -1 = desconocida
         public double DiskReadMBs = -1;
         public double DiskWriteMBs = -1;
@@ -606,17 +612,34 @@ namespace NautilusMotion.Monitor
                         double val = Convert.ToDouble(v);
 
                         if (type == "Temperature" && val > 0 && val < 150)
+                        {
                             s.Temps.Add(new TempReading { Name = Trim(hwName, name), Celsius = Math.Round(val, 0) });
+                            if (isGpu && s.GpuTempC < 0) s.GpuTempC = Math.Round(val, 0);
+                        }
                         else if (type == "Fan" && val > 0)
+                        {
                             s.Fans.Add(new FanReading { Name = Trim(hwName, name), Rpm = (int)Math.Round(val) });
+                            if (isGpu && s.GpuFanRpm < 0) s.GpuFanRpm = (int)Math.Round(val);
+                        }
                         else if (type == "Voltage" && val > 0 && val < 24)
                             s.Volts.Add(new SensorReading { Name = Trim(hwName, name), Value = Math.Round(val, 3) });
                         else if (type == "Power" && val > 0 && val < 2000)
+                        {
                             s.Powers.Add(new SensorReading { Name = Trim(hwName, name), Value = Math.Round(val, 1) });
+                            if (isGpu && val > s.GpuPowerW) s.GpuPowerW = Math.Round(val, 1);
+                        }
+                        else if (type == "Clock" && isGpu && val > 0)
+                        {
+                            if (name.IndexOf("Core", StringComparison.OrdinalIgnoreCase) >= 0 && s.GpuCoreClockMhz < 0) s.GpuCoreClockMhz = Math.Round(val, 0);
+                            else if (name.IndexOf("Memory", StringComparison.OrdinalIgnoreCase) >= 0 && s.GpuMemClockMhz < 0) s.GpuMemClockMhz = Math.Round(val, 0);
+                        }
                         else if (type == "Load" && isGpu && name.IndexOf("Core", StringComparison.OrdinalIgnoreCase) >= 0)
                             { if (val > gpuLoadMax) gpuLoadMax = val; }
-                        else if (type == "SmallData" && isGpu && val > 0 && name.IndexOf("Memory Used", StringComparison.OrdinalIgnoreCase) >= 0)
-                            { if (val > s.GpuMemUsedMB) s.GpuMemUsedMB = Math.Round(val, 0); }
+                        else if (type == "SmallData" && isGpu && val > 0)
+                        {
+                            if (name.IndexOf("Memory Used", StringComparison.OrdinalIgnoreCase) >= 0) { if (val > s.GpuMemUsedMB) s.GpuMemUsedMB = Math.Round(val, 0); }
+                            else if (name.IndexOf("Memory Total", StringComparison.OrdinalIgnoreCase) >= 0 && s.GpuMemTotalMB < 0) s.GpuMemTotalMB = Math.Round(val, 0);
+                        }
                     }
 
                 var subs = (System.Collections.IEnumerable)_hwSubHw.GetValue(hw, null);
