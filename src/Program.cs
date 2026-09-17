@@ -23,6 +23,8 @@ namespace NautilusMotion.Monitor
         public static bool AutoAdvanced;
         // Modo demostracion (para capturas de documentacion): datos representativos, sin timer.
         public static bool DemoMode;
+        // Arranque con Windows: abre minimizado a la bandeja.
+        public static bool StartHidden;
 
         [STAThread]
         public static void Main(string[] args)
@@ -110,6 +112,26 @@ namespace NautilusMotion.Monitor
                 HookErrors(app0);
                 var main0 = new MainWindow();
                 app0.Run(main0);
+                return;
+            }
+
+            // Arranque con Windows: abre directo (sin selector) y minimizado a la
+            // bandeja, con el idioma guardado y en modo ligero (sin UAC en cada inicio).
+            if (args != null && args.Length >= 1 && args[0] == "--autostart")
+            {
+                StartHidden = true;
+                string saved = Settings.GetLang();
+                if (!string.IsNullOrEmpty(saved)) SetLangFromCode(saved);
+
+                bool isNewA;
+                _mutex = new Mutex(true, "NautilusMotion.Monitor.SingleInstance", out isNewA);
+                if (!isNewA) return;
+
+                var appA = new Application();
+                appA.ShutdownMode = ShutdownMode.OnLastWindowClose;
+                HookErrors(appA);
+                appA.Run(new MainWindow());
+                GC.KeepAlive(_mutex);
                 return;
             }
 

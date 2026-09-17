@@ -147,6 +147,10 @@ namespace NautilusMotion.Monitor
             {"rec.coltime", new[]{"Date and time","Fecha y hora","Дата и время","Date et heure","Datum und Uhrzeit","Data e hora"}},
 
             // Bandeja del sistema / segundo plano
+            {"set.startup", new[]{"Start with Windows","Iniciar con Windows","Запуск с Windows","Démarrer avec Windows","Mit Windows starten","Iniciar com o Windows"}},
+            {"set.alerts", new[]{"Temperature alerts","Alertas de temperatura","Оповещения о температуре","Alertes de température","Temperatur-Warnungen","Alertas de temperatura"}},
+            {"alert.high", new[]{"High temperature","Temperatura alta","Высокая температура","Température élevée","Hohe Temperatur","Temperatura alta"}},
+
             {"tray.show", new[]{"Show","Mostrar","Показать","Afficher","Anzeigen","Mostrar"}},
             {"tray.exit", new[]{"Exit","Salir","Выход","Quitter","Beenden","Sair"}},
             {"tray.background", new[]{

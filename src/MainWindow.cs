@@ -31,8 +31,9 @@ namespace NautilusMotion.Monitor
         // Gauges
         private Gauge _gCpu, _gGpu, _gRam, _gDisk;
 
-        // Gráfica de historial (CPU / GPU / RAM)
+        // Gráfica de historial (CPU / GPU / RAM / Temp)
         private LineChart _histChart;
+        private TextBlock[] _legVals;
 
         // CPU
         private TextBlock _cpuNameTx, _clockTx, _coresTx, _coreNote;
@@ -60,6 +61,12 @@ namespace NautilusMotion.Monitor
         private volatile bool _uiVisible = true;
         private bool _balloonShown;
         private Snapshot _lastSnap;
+
+        // Ajustes / alertas
+        private Border _startupChip, _alertsChip;
+        private TextBlock _startupTx, _alertsTx;
+        private volatile bool _alertsEnabled = true;
+        private bool _cpuAlerting, _gpuAlerting;
 
         public MainWindow()
         {
@@ -125,7 +132,11 @@ namespace NautilusMotion.Monitor
 
             if (!Program.DemoMode) SetupTray();
 
-            Loaded += delegate { Start(); };
+            Loaded += delegate
+            {
+                if (Program.StartHidden && _tray != null) { _uiVisible = false; Hide(); } // arranque con Windows: a la bandeja
+                Start();
+            };
             Closed += delegate { Cleanup(); };
         }
 
@@ -154,12 +165,15 @@ namespace NautilusMotion.Monitor
                 _sampler = new Sampler();
                 try { _sampler.Warmup(); } catch { }
 
-                // Sensores avanzados automaticos: el proceso normalmente ya viene
-                // elevado (la app se relanza como admin al elegir idioma). Se intenta
-                // siempre; si no hay driver/DLL o no hay permisos, cae a modo Lite.
-                Dispatcher.BeginInvoke((Action)delegate { if (!AdvancedSensors.Enabled) _advChipTx.Text = Loc.T("adv.enabling"); });
-                try { AdvancedSensors.Enable(); } catch { }
-                Dispatcher.BeginInvoke((Action)delegate { UpdateAdvChip(); });
+                // Sensores avanzados automáticos solo si el proceso ya es admin (la app
+                // se relanza elevada al elegir idioma). En arranque Lite / UAC cancelado
+                // no se activan aquí: el chip queda en "Activar" para elevar bajo demanda.
+                if (Program.IsElevated())
+                {
+                    Dispatcher.BeginInvoke((Action)delegate { if (!AdvancedSensors.Enabled) _advChipTx.Text = Loc.T("adv.enabling"); });
+                    try { AdvancedSensors.Enable(); } catch { }
+                    Dispatcher.BeginInvoke((Action)delegate { UpdateAdvChip(); });
+                }
 
                 Thread.Sleep(700); // deja transcurrir tiempo para el primer delta de CPU
 
@@ -171,6 +185,7 @@ namespace NautilusMotion.Monitor
                     {
                         _lastSnap = snap;
                         if (_logger.Active) _logger.Write(snap);    // sigue grabando aunque este en segundo plano
+                        CheckAlerts(snap);                          // avisa por bandeja aunque esté oculto
                         if (_uiVisible)
                         {
                             Snapshot s = snap;
@@ -359,6 +374,20 @@ namespace NautilusMotion.Monitor
 
             outer.Children.Add(chips);
 
+            // Segunda fila: ajustes (arranque con Windows / alertas de temperatura)
+            var chips2 = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+            _startupChip = ChipBorder(Loc.T("set.startup"), out _startupTx);
+            _startupChip.MouseLeftButtonUp += delegate { OnStartupClick(); };
+            chips2.Children.Add(_startupChip);
+            _alertsChip = ChipBorder(Loc.T("set.alerts"), out _alertsTx);
+            _alertsChip.Margin = new Thickness(8, 0, 0, 0);
+            _alertsChip.MouseLeftButtonUp += delegate { OnAlertsClick(); };
+            chips2.Children.Add(_alertsChip);
+            outer.Children.Add(chips2);
+            _alertsEnabled = Settings.GetAlertsEnabled();
+            StyleToggleChip(_startupChip, _startupTx, Settings.GetStartWithWindows());
+            StyleToggleChip(_alertsChip, _alertsTx, _alertsEnabled);
+
             _advHint = new TextBlock { Text = Loc.T("adv.hint"), Foreground = Theme.Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 8, 0, 0) };
             outer.Children.Add(_advHint);
 
@@ -414,10 +443,11 @@ namespace NautilusMotion.Monitor
             head.ColumnDefinitions.Add(Col(GridLength.Auto));
             head.Children.Add(Header(Loc.T("card.history")));
             var legend = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            legend.Children.Add(LegendItem("CPU", Theme.AccentBrush));
-            legend.Children.Add(LegendItem("GPU", Theme.Warm));
-            legend.Children.Add(LegendItem("RAM", Theme.Cool));
-            legend.Children.Add(LegendItem("°C", Theme.ChartTemp));
+            _legVals = new TextBlock[4];
+            legend.Children.Add(LegendItem("CPU", Theme.AccentBrush, out _legVals[0]));
+            legend.Children.Add(LegendItem("GPU", Theme.Warm, out _legVals[1]));
+            legend.Children.Add(LegendItem("RAM", Theme.Cool, out _legVals[2]));
+            legend.Children.Add(LegendItem("TEMP", Theme.ChartTemp, out _legVals[3]));
             Grid.SetColumn(legend, 1);
             head.Children.Add(legend);
             sp.Children.Add(head);
@@ -427,11 +457,13 @@ namespace NautilusMotion.Monitor
             return card;
         }
 
-        private UIElement LegendItem(string label, Brush color)
+        private UIElement LegendItem(string label, Brush color, out TextBlock valueTx)
         {
             var s = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             s.Children.Add(new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = color, VerticalAlignment = VerticalAlignment.Center });
-            s.Children.Add(new TextBlock { Text = label, Foreground = Theme.Muted, FontSize = 11, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            s.Children.Add(new TextBlock { Text = label, Foreground = Theme.Muted, FontSize = 11, Margin = new Thickness(5, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center });
+            valueTx = new TextBlock { Text = "--", Foreground = color, FontSize = 11, FontWeight = FontWeights.SemiBold, FontFamily = Theme.Mono, VerticalAlignment = VerticalAlignment.Center };
+            s.Children.Add(valueTx);
             return s;
         }
 
@@ -629,8 +661,16 @@ namespace NautilusMotion.Monitor
                 _gDisk.SetUnknown(Loc.T("na"));
 
             // Historial (CPU % / GPU % / RAM % / Temp CPU °C, todo en eje 0-100)
+            double ctemp = CpuTemp(s);
             if (_histChart != null)
-                _histChart.Push(new double[] { s.CpuTotal, s.GpuLoadPct >= 0 ? s.GpuLoadPct : double.NaN, s.RamUsedPct, CpuTemp(s) });
+                _histChart.Push(new double[] { s.CpuTotal, s.GpuLoadPct >= 0 ? s.GpuLoadPct : double.NaN, s.RamUsedPct, ctemp });
+            if (_legVals != null)
+            {
+                _legVals[0].Text = F0(s.CpuTotal) + "%";
+                _legVals[1].Text = s.GpuLoadPct >= 0 ? F0(s.GpuLoadPct) + "%" : "--";
+                _legVals[2].Text = F0(s.RamUsedPct) + "%";
+                _legVals[3].Text = double.IsNaN(ctemp) ? "--" : F0(ctemp) + "°C";
+            }
 
             // Por-nucleo: crea las barras la primera vez (o si cambia el recuento) segun lo muestreado
             if (s.CpuCores != null && s.CpuCores.Length > 0)
@@ -920,6 +960,67 @@ namespace NautilusMotion.Monitor
             Topmost = true; Topmost = false; // lo trae al frente
             _uiVisible = true;
             if (_lastSnap != null) UpdateUi(_lastSnap);
+        }
+
+        // ---------------------------------------------------------------
+        //  Ajustes (arranque con Windows / alertas) y alertas por bandeja
+        // ---------------------------------------------------------------
+        private void StyleToggleChip(Border chip, TextBlock tx, bool on)
+        {
+            if (chip == null) return;
+            chip.Background = on ? Theme.AccentBrush : Theme.Card;
+            chip.BorderBrush = on ? Theme.AccentBrush : Theme.CardBorder;
+            tx.Foreground = on ? Theme.AccentText : Theme.BodyText;
+        }
+
+        private void OnStartupClick()
+        {
+            Settings.SetStartWithWindows(!Settings.GetStartWithWindows());
+            StyleToggleChip(_startupChip, _startupTx, Settings.GetStartWithWindows());
+        }
+
+        private void OnAlertsClick()
+        {
+            _alertsEnabled = !_alertsEnabled;
+            Settings.SetAlertsEnabled(_alertsEnabled);
+            StyleToggleChip(_alertsChip, _alertsTx, _alertsEnabled);
+        }
+
+        // Se ejecuta en el hilo de muestreo (también en segundo plano).
+        private void CheckAlerts(Snapshot s)
+        {
+            if (!_alertsEnabled || _tray == null) return;
+            int th = Settings.GetTempAlertC();
+            double cpu = CpuTemp(s);
+            double gpu = GpuTempVal(s);
+
+            if (!double.IsNaN(cpu))
+            {
+                if (cpu >= th && !_cpuAlerting) { _cpuAlerting = true; Alert("CPU " + F0(cpu) + " °C"); }
+                else if (cpu < th - 5) _cpuAlerting = false;
+            }
+            if (!double.IsNaN(gpu))
+            {
+                if (gpu >= th && !_gpuAlerting) { _gpuAlerting = true; Alert("GPU " + F0(gpu) + " °C"); }
+                else if (gpu < th - 5) _gpuAlerting = false;
+            }
+        }
+
+        private void Alert(string body)
+        {
+            Dispatcher.BeginInvoke((Action)delegate
+            {
+                try { if (_tray != null) _tray.ShowBalloonTip(6000, "NauTilus Monitor · " + Loc.T("alert.high"), body, System.Windows.Forms.ToolTipIcon.Warning); }
+                catch { }
+            });
+        }
+
+        private static double GpuTempVal(Snapshot s)
+        {
+            foreach (TempReading t in s.Temps)
+                if (t.Name != null && t.Name.IndexOf("GPU", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return t.Celsius;
+            return double.NaN;
         }
 
         // ---------------------------------------------------------------

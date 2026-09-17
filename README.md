@@ -87,6 +87,12 @@ format**, so it opens cleanly in your Excel (e.g. `;` and comma decimals on a Sp
 recording — with the window hidden. Double-click the tray icon or its **Show** menu to bring it back;
 **Exit** closes it for good. The close (✕) button exits directly.
 
+- **Temperature alerts**: get a tray notification when CPU or GPU temperature crosses a threshold
+  (90 °C by default, with hysteresis so it doesn't spam). Toggle it from the top bar.
+- **Start with Windows**: launch at sign-in, minimized to the tray, in the remembered language.
+- **Live history chart**: CPU / GPU / RAM load and CPU temperature over the last 2 minutes, with a
+  0–100 axis and the current value of each line.
+
 ## Build
 
 No Visual Studio or .NET SDK required. From the repo root:

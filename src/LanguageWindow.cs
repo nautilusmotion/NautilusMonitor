@@ -123,6 +123,7 @@ namespace NautilusMotion.Monitor
         private void Choose(Lang lang)
         {
             Loc.Current = lang;
+            Settings.SetLang(Program.LangCode()); // recuerda el idioma (lo usa el arranque con Windows)
 
             // Para leer temperaturas y ventiladores hacen falta los sensores
             // avanzados, que requieren administrador. Si aun no estamos elevados y

@@ -1,5 +1,6 @@
 // NauTilus Monitor - Gráfica de líneas en vivo (historial), WPF nativo sin librerías.
-// Mantiene un buffer circular por serie y dibuja una polilínea por cada una.
+// Mantiene un buffer circular por serie y dibuja una polilínea por cada una,
+// con rejilla y etiquetas de eje (0/25/50/75/100).
 
 using System;
 using System.Windows;
@@ -18,6 +19,9 @@ namespace NautilusMotion.Monitor
         private readonly Canvas _canvas;
         private readonly Polyline[] _poly;
         private readonly Line[] _grid;
+        private readonly TextBlock[] _axis; // etiquetas 0/25/50/75/100
+        private readonly double[] _axisVals = { 100, 75, 50, 25, 0 };
+        private const double PadL = 30;     // hueco izquierdo para las cifras del eje
 
         public LineChart(int capacity, double max, Brush[] colors, double height)
         {
@@ -42,7 +46,6 @@ namespace NautilusMotion.Monitor
 
             _canvas = new Canvas();
 
-            // Líneas de rejilla horizontales (25 / 50 / 75 %)
             _grid = new Line[3];
             for (int i = 0; i < 3; i++)
             {
@@ -51,7 +54,6 @@ namespace NautilusMotion.Monitor
                 _canvas.Children.Add(ln);
             }
 
-            // Una polilínea por serie
             _poly = new Polyline[_series];
             for (int s = 0; s < _series; s++)
             {
@@ -65,6 +67,15 @@ namespace NautilusMotion.Monitor
                 };
                 _poly[s] = p;
                 _canvas.Children.Add(p);
+            }
+
+            // Etiquetas del eje Y (encima de las líneas)
+            _axis = new TextBlock[_axisVals.Length];
+            for (int i = 0; i < _axisVals.Length; i++)
+            {
+                var t = new TextBlock { Text = ((int)_axisVals[i]).ToString(), Foreground = Theme.Muted, FontSize = 10, FontFamily = Theme.Mono };
+                _axis[i] = t;
+                _canvas.Children.Add(t);
             }
 
             Child = _canvas;
@@ -87,11 +98,23 @@ namespace NautilusMotion.Monitor
             double w = _canvas.ActualWidth;
             double h = _canvas.ActualHeight;
             if (w <= 0 || h <= 0) return;
+            double plotW = w - PadL;
+            if (plotW <= 1) return;
 
             for (int i = 0; i < 3; i++)
             {
                 double y = h * (i + 1) / 4.0;
-                _grid[i].X1 = 0; _grid[i].X2 = w; _grid[i].Y1 = y; _grid[i].Y2 = y;
+                _grid[i].X1 = PadL; _grid[i].X2 = w; _grid[i].Y1 = y; _grid[i].Y2 = y;
+            }
+
+            // etiquetas del eje: 100 arriba, 0 abajo
+            for (int i = 0; i < _axisVals.Length; i++)
+            {
+                double norm = _axisVals[i] / _max; if (norm < 0) norm = 0; if (norm > 1) norm = 1;
+                double y = h - norm * h - 6;
+                if (y < 0) y = 0; if (y > h - 12) y = h - 12;
+                Canvas.SetLeft(_axis[i], 3);
+                Canvas.SetTop(_axis[i], y);
             }
 
             for (int s = 0; s < _series; s++)
@@ -101,7 +124,7 @@ namespace NautilusMotion.Monitor
                 {
                     double v = _buf[s][i];
                     if (double.IsNaN(v)) continue;
-                    double x = w * i / (double)(_cap - 1);          // más reciente a la derecha
+                    double x = PadL + plotW * i / (double)(_cap - 1);   // más reciente a la derecha
                     double norm = v / _max; if (norm < 0) norm = 0; if (norm > 1) norm = 1;
                     double y = h - norm * h;
                     pts.Add(new Point(x, y));
