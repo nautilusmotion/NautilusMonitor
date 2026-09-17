@@ -50,6 +50,9 @@ namespace NautilusMotion.Monitor
         // Curva de temperatura en el historial (cian, para distinguirla de las cargas)
         public static readonly Brush ChartTemp = S("#4EC9E8");
 
+        // Estado saludable (verde) para la salud de disco
+        public static readonly Brush Good = S("#35C46B");
+
         public static readonly FontFamily Font = new FontFamily("Segoe UI");
         public static readonly FontFamily Mono = new FontFamily("Consolas");
 

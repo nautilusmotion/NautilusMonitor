@@ -42,7 +42,7 @@ namespace NautilusMotion.Monitor
         private TextBlock[] _corePcts;
 
         // Fichas dinamicas
-        private StackPanel _tempsHost, _fansHost, _voltsHost, _powersHost;
+        private StackPanel _tempsHost, _fansHost, _voltsHost, _powersHost, _diskHealthHost;
         private Border _voltsCard, _powerCard, _batCard;
         private BarMeter _diskBar;
         private TextBlock _diskRWTx, _netDownTx, _netUpTx, _uptimeTx, _procTx, _osTx, _boardTx, _commitTx, _batTx;
@@ -197,6 +197,17 @@ namespace NautilusMotion.Monitor
             });
             _worker.IsBackground = true;
             _worker.Start();
+
+            // Salud de disco: lectura única en su propio hilo (no bloquea el muestreo).
+            var diskTh = new Thread(delegate()
+            {
+                System.Collections.Generic.List<DiskInfo> disks = null;
+                try { disks = DiskHealth.GetAll(); } catch { }
+                var d = disks;
+                Dispatcher.BeginInvoke((Action)delegate { FillDiskHealth(d); });
+            });
+            diskTh.IsBackground = true;
+            diskTh.Start();
         }
 
         private void StartDemo()
@@ -247,6 +258,11 @@ namespace NautilusMotion.Monitor
 
             AdvancedSensors.Status = "ok";
             UpdateUi(s);
+            FillDiskHealth(new System.Collections.Generic.List<DiskInfo>
+            {
+                new DiskInfo { Name = "WDC PC SN530 NVMe", Media = "SSD", Bus = "NVMe", SizeGB = 512, Health = 0, TempC = 41, PowerOnHours = 3120, WearPct = 4 },
+                new DiskInfo { Name = "ST1000LM048-2E7172", Media = "HDD", Bus = "SATA", SizeGB = 1000, Health = 0, TempC = 36, PowerOnHours = 8640, SpindleRpm = 5400 }
+            });
             MarkAdvOn();
         }
 
@@ -341,8 +357,112 @@ namespace NautilusMotion.Monitor
             g.Children.Add(rightCol);
 
             col.Children.Add(g);
+            col.Children.Add(BuildDiskHealthCard());
             scroll.Content = col;
             return scroll;
+        }
+
+        private UIElement BuildDiskHealthCard()
+        {
+            var card = Card();
+            var sp = (StackPanel)card.Child;
+            sp.Children.Add(Header(Loc.T("card.diskhealth")));
+            _diskHealthHost = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
+            _diskHealthHost.Children.Add(NoneNote(Loc.T("dh.reading")));
+            sp.Children.Add(_diskHealthHost);
+            return card;
+        }
+
+        private void FillDiskHealth(System.Collections.Generic.List<DiskInfo> disks)
+        {
+            if (_diskHealthHost == null) return;
+            _diskHealthHost.Children.Clear();
+            if (disks == null || disks.Count == 0)
+            {
+                _diskHealthHost.Children.Add(NoneNote(Loc.T("win11.unknown")));
+                return;
+            }
+            bool anyReliability = false;
+            foreach (DiskInfo d in disks)
+            {
+                _diskHealthHost.Children.Add(DiskHealthRow(d));
+                if (d.TempC >= 0 || d.PowerOnHours >= 0 || d.WearPct >= 0) anyReliability = true;
+            }
+            if (!anyReliability)
+                _diskHealthHost.Children.Add(new TextBlock { Text = Loc.T("dh.needadmin"), Foreground = Theme.Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) });
+        }
+
+        private UIElement DiskHealthRow(DiskInfo d)
+        {
+            var outer = new Border { Background = Theme.LogBg, BorderBrush = Theme.CardBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 0, 0, 8) };
+            var col = new StackPanel();
+
+            // Fila 1: nombre + estado
+            var top = new Grid();
+            top.ColumnDefinitions.Add(Col(new GridLength(1, GridUnitType.Star)));
+            top.ColumnDefinitions.Add(Col(GridLength.Auto));
+            top.Children.Add(new TextBlock { Text = string.IsNullOrEmpty(d.Name) ? "--" : d.Name, Foreground = Theme.TitleText, FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center });
+            var badge = HealthBadge(d.Health);
+            Grid.SetColumn(badge, 1);
+            top.Children.Add(badge);
+            col.Children.Add(top);
+
+            // Fila 2: tipo · bus · tamaño
+            col.Children.Add(new TextBlock { Text = DiskSubtitle(d), Foreground = Theme.Muted, FontSize = 12, Margin = new Thickness(0, 3, 0, 0) });
+
+            // Fila 3: reliability (temp · horas · desgaste) si está disponible
+            string metrics = DiskMetrics(d);
+            if (metrics.Length > 0)
+                col.Children.Add(new TextBlock { Text = metrics, Foreground = Theme.BodyText, FontSize = 12, FontFamily = Theme.Mono, Margin = new Thickness(0, 5, 0, 0) });
+
+            // Barra de vida restante (SSD con desgaste)
+            if (d.WearPct >= 0)
+            {
+                double life = 100 - d.WearPct;
+                var bar = new BarMeter(8) { Margin = new Thickness(0, 6, 0, 0) };
+                bar.SetValue(life, life <= 20 ? Theme.Hot : (life <= 50 ? Theme.Warm : Theme.Good));
+                col.Children.Add(bar);
+            }
+
+            outer.Child = col;
+            return outer;
+        }
+
+        private Border HealthBadge(int health)
+        {
+            string txt; Brush color;
+            if (health == 0) { txt = Loc.T("health.ok"); color = Theme.Good; }
+            else if (health == 1) { txt = Loc.T("health.warn"); color = Theme.Warm; }
+            else if (health == 2) { txt = Loc.T("health.bad"); color = Theme.Hot; }
+            else { txt = Loc.T("health.unknown"); color = Theme.Muted; }
+            var b = new Border { Background = Brushes.Transparent, BorderBrush = color, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(9, 2, 9, 3), VerticalAlignment = VerticalAlignment.Center };
+            b.Child = new TextBlock { Text = txt, Foreground = color, FontSize = 11, FontWeight = FontWeights.SemiBold };
+            return b;
+        }
+
+        private static string DiskSubtitle(DiskInfo d)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            if (!string.IsNullOrEmpty(d.Media)) parts.Add(d.Media);
+            if (d.SpindleRpm > 0) parts.Add(d.SpindleRpm + " RPM");
+            if (!string.IsNullOrEmpty(d.Bus)) parts.Add(d.Bus);
+            if (d.SizeGB > 0) parts.Add(SizeLabel(d.SizeGB));
+            return string.Join("  ·  ", parts.ToArray());
+        }
+
+        private static string SizeLabel(double gb)
+        {
+            if (gb >= 1000) return (gb / 1000.0).ToString("0.0", Inv).TrimEnd('0').TrimEnd('.') + " TB";
+            return F0(gb) + " GB";
+        }
+
+        private string DiskMetrics(DiskInfo d)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            if (d.TempC >= 0) parts.Add(d.TempC + " °C");
+            if (d.PowerOnHours >= 0) parts.Add(d.PowerOnHours.ToString("#,##0", Inv) + " h");
+            if (d.WearPct >= 0) parts.Add(Loc.T("dh.wear") + " " + d.WearPct + "%");
+            return string.Join("   ·   ", parts.ToArray());
         }
 
         private UIElement BuildAdvBar()
@@ -1160,7 +1280,7 @@ namespace NautilusMotion.Monitor
             if (rows < 1) rows = 1;
             double leftCol = 520 + rows * 19;         // ficha CPU (base + filas) + voltajes + disco + red
             double content = Math.Max(leftCol, 660);  // vs. columna derecha (temps + vent. + potencia + sistema)
-            return 658 + content;                     // barra título + héroe + gauges + historial + pie
+            return 820 + content;                     // título + héroe + chips + gauges + historial + salud disco + pie
         }
 
         private void SizeToCores(int coreCount)
