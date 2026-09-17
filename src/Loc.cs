@@ -158,11 +158,12 @@ namespace NautilusMotion.Monitor
                 "Não foi possível iniciar os sensores avançados."}},
 
             // Grabacion de temperaturas
-            {"rec.start", new[]{"Record temperatures","Grabar temperaturas","Записать температуры","Enregistrer les températures","Temperaturen aufzeichnen","Gravar temperaturas"}},
+            {"rec.start", new[]{"Record sensors","Grabar sensores","Записать датчики","Enregistrer les capteurs","Sensoren aufzeichnen","Gravar sensores"}},
             {"rec.on", new[]{"Recording  ●","Grabando  ●","Запись  ●","Enregistrement  ●","Aufzeichnung  ●","Gravando  ●"}},
             {"rec.savingto", new[]{"Saving to:","Guardando en:","Сохранение в:","Enregistrement dans :","Speichern in:","Salvando em:"}},
             {"rec.savedto", new[]{"Saved to:","Guardado en:","Сохранено в:","Enregistré dans :","Gespeichert in:","Salvo em:"}},
             {"rec.openfolder", new[]{"Open folder","Abrir carpeta","Открыть папку","Ouvrir le dossier","Ordner öffnen","Abrir pasta"}},
+            {"rec.interval", new[]{"Every {n}s","Cada {n} s","Каждые {n} с","Toutes les {n} s","Alle {n} s","A cada {n} s"}},
             {"rec.error", new[]{"Could not start recording.","No se pudo iniciar la grabación.","Не удалось начать запись.","Impossible de démarrer l'enregistrement.","Aufzeichnung konnte nicht gestartet werden.","Não foi possível iniciar a gravação."}},
             {"rec.coltime", new[]{"Date and time","Fecha y hora","Дата и время","Date et heure","Datum und Uhrzeit","Data e hora"}},
 

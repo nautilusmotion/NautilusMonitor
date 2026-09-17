@@ -73,11 +73,12 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -LhmVersion 0.9.4   # pin a v
 If you ship the `.exe` on its own, just place `LibreHardwareMonitorLib.dll` (and `HidSharp.dll`) beside
 it later — the app picks them up with no rebuild.
 
-## Recording temperatures
+## Recording sensors
 
-Click **"Record temperatures"** to log a live session to a CSV. One row per second with the
-timestamp, CPU/GPU/RAM load and every temperature sensor (one column each). The file is written to
-`Documents\NauTilus Monitor\temperaturas-<date>.csv` using **your Windows list separator and decimal
+Click **"Record sensors"** to log a live session to a CSV — **every sensor**: CPU/GPU/RAM/disk load,
+clocks, network, battery, and one column per temperature, fan, voltage and power reading. The
+**interval is configurable** (1 / 5 / 10 / 30 s) with the chip next to the button. The file is written
+to `Documents\NauTilus Monitor\sensores-<date>.csv` using **your Windows list separator and decimal
 format**, so it opens cleanly in your Excel (e.g. `;` and comma decimals on a Spanish system). Use
 **"Open folder"** to jump straight to it. Recording keeps going while the app is in the background.
 

@@ -53,6 +53,20 @@ namespace NautilusMotion.Monitor
             return 90; // umbral por defecto
         }
 
+        // ---- Intervalo de grabación (segundos entre filas del CSV) ----
+        public static int GetRecordInterval()
+        {
+            try { using (var k = Registry.CurrentUser.OpenSubKey(Key)) { if (k != null) { object v = k.GetValue("RecordIntervalSec"); if (v != null) { int n = Convert.ToInt32(v); if (n >= 1 && n <= 3600) return n; } } } }
+            catch { }
+            return 1;
+        }
+
+        public static void SetRecordInterval(int sec)
+        {
+            try { using (var k = Registry.CurrentUser.CreateSubKey(Key)) k.SetValue("RecordIntervalSec", sec, RegistryValueKind.DWord); }
+            catch { }
+        }
+
         // ---- Arranque con Windows (clave Run del usuario, sin admin) ----
         public static bool GetStartWithWindows()
         {

@@ -51,9 +51,11 @@ namespace NautilusMotion.Monitor
         private Border _advChip;
         private TextBlock _advChipTx, _advHint;
 
-        // Grabacion de temperaturas (a CSV)
-        private Border _recChip, _openChip;
-        private TextBlock _recChipTx, _recStatus;
+        // Grabacion de sensores (a CSV)
+        private Border _recChip, _openChip, _intervalChip;
+        private TextBlock _recChipTx, _recStatus, _intervalTx;
+        private int _recIntervalSec = 1;
+        private static readonly int[] IntervalSteps = { 1, 5, 10, 30 };
         private readonly TempLogger _logger = new TempLogger();
 
         // Segundo plano (bandeja del sistema)
@@ -485,6 +487,14 @@ namespace NautilusMotion.Monitor
             _recChip.MouseLeave += delegate { if (!_logger.Active) _recChip.BorderBrush = Theme.CardBorder; };
             _recChip.MouseLeftButtonUp += delegate { OnRecClick(); };
             chips.Children.Add(_recChip);
+
+            _recIntervalSec = Settings.GetRecordInterval();
+            _intervalChip = ChipBorder(IntervalLabel(), out _intervalTx);
+            _intervalChip.Margin = new Thickness(8, 0, 0, 0);
+            _intervalChip.MouseEnter += delegate { _intervalChip.BorderBrush = Theme.AccentBrush; };
+            _intervalChip.MouseLeave += delegate { _intervalChip.BorderBrush = Theme.CardBorder; };
+            _intervalChip.MouseLeftButtonUp += delegate { OnIntervalClick(); };
+            chips.Children.Add(_intervalChip);
 
             TextBlock openTx;
             _openChip = ChipBorder(Loc.T("rec.openfolder"), out openTx);
@@ -1035,6 +1045,21 @@ namespace NautilusMotion.Monitor
             if (_logger.Active) StopRec(); else StartRec();
         }
 
+        private string IntervalLabel()
+        {
+            return Loc.T("rec.interval").Replace("{n}", _recIntervalSec.ToString());
+        }
+
+        private void OnIntervalClick()
+        {
+            int idx = 0;
+            for (int i = 0; i < IntervalSteps.Length; i++) if (IntervalSteps[i] == _recIntervalSec) { idx = i; break; }
+            _recIntervalSec = IntervalSteps[(idx + 1) % IntervalSteps.Length];
+            Settings.SetRecordInterval(_recIntervalSec);
+            _logger.IntervalSec = _recIntervalSec;              // aplica también a una grabación en curso
+            if (_intervalTx != null) _intervalTx.Text = IntervalLabel();
+        }
+
         private void StartRec()
         {
             if (!_logger.Start(null))
@@ -1043,6 +1068,7 @@ namespace NautilusMotion.Monitor
                 _recStatus.Foreground = Theme.AccentBrush;
                 return;
             }
+            _logger.IntervalSec = _recIntervalSec;
             _recChip.Background = Theme.AccentBrush;
             _recChip.BorderBrush = Theme.AccentBrush;
             _recChipTx.Text = Loc.T("rec.on");
